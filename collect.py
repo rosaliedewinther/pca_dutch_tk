@@ -34,10 +34,6 @@ def handle_link(response):
     extracted['ondertekenaars'] = ', '.join(
         extracted['ondertekenaars'])
 
-    # extracted['voor'] = [(name.rsplit(' ', 1)[0], int(name.rsplit(' ', 1)[
-    #                      1])) for name in extracted['voor']]
-    # extracted['tegen'] = [(name.rsplit(' ', 1)[0], int(name.rsplit(' ', 1)[
-    #                      1])) for name in extracted['tegen']]
     extracted['datum'] = datetime.strptime(
         extracted['datum'], "%d %B %Y")
 
@@ -76,24 +72,3 @@ async def main():
 
 loop = asyncio.get_event_loop()
 loop.run_until_complete(main())
-
-
-# for i in tqdm(range(1, 49529, 15)):
-#    try:
-#
-#        url = f'https://www.tweedekamer.nl/kamerstukken/moties?qry=*&cfg=tksearch&fld_tk_categorie=Kamerstukken&fld_prl_kamerstuk=Moties&srt=date%3Adesc%3Adate&sta={i}'
-#        response = session.get(url)
-#
-#        extracted = parselet_list.parse_fromstring(response.content)
-#        for link in [x['link'] for x in extracted['moties']]:
-#            try:
-#                response = session.get(f'https://www.tweedekamer.nl{link}')
-#
-#            except:
-#                f.write("error with:", str(link))
-#        df = df.reset_index(drop=True)
-#        df.to_csv("out.csv")
-#    except:
-#        f.write("error with:", str(i))
-# f.close()
-#
