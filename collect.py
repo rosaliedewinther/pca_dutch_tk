@@ -1,0 +1,99 @@
+from enum import Enum
+import requests
+import parslepy
+import locale
+import pandas as pd
+import time
+import asyncio
+from tqdm import tqdm
+from datetime import datetime
+locale.setlocale(locale.LC_ALL, "nl_NL")
+
+parselet_detail = parslepy.Parselet({
+    'naam': 'h1:not(span)',
+    'datum': '.u-pr--collapse-at-small > ul > li:first-child > div',
+    'ondertekenaars(.m-list__item--variant-member)': [{
+        'name': '.'
+    }],
+    'voor(table.u-text-color--primary)': ['tr'],
+    'tegen(table:not(.u-text-color--primary))': ['tr']
+})
+
+session = requests.Session()
+df = pd.DataFrame()
+f = open('errors.txt', 'w')
+
+
+def handle_link(response):
+    extracted = parselet_detail.parse_fromstring(response.content)
+
+    extracted['naam'] = extracted['naam'].split(': ', 1)[1]
+    extracted['ondertekenaars'] = [name['name'].split(
+        ', ')[0].removeprefix("Eerste ondertekenaar").removeprefix("Mede ondertekenaar").removeprefix("Indiener") for name in extracted['ondertekenaars']]
+
+    extracted['ondertekenaars'] = ', '.join(
+        extracted['ondertekenaars'])
+
+    # extracted['voor'] = [(name.rsplit(' ', 1)[0], int(name.rsplit(' ', 1)[
+    #                      1])) for name in extracted['voor']]
+    # extracted['tegen'] = [(name.rsplit(' ', 1)[0], int(name.rsplit(' ', 1)[
+    #                      1])) for name in extracted['tegen']]
+    extracted['datum'] = datetime.strptime(
+        extracted['datum'], "%d %B %Y")
+
+    for partij in extracted['voor']:
+        if partij is not None:
+            extracted[partij.rsplit(' ', 1)[0]] = int(1)
+    for partij in extracted['tegen']:
+        if partij is not None:
+            extracted[partij.rsplit(' ', 1)[0]] = int(0)
+    del extracted['voor']
+    del extracted['tegen']
+    return extracted
+
+
+async def main():
+    loop = asyncio.get_event_loop()
+    futures = []
+
+    with open('motion_links.txt') as file:
+        for line in file:
+            futures.append(loop.run_in_executor(
+                None, requests.get, line.rstrip()))
+
+    responses = []
+    for future in tqdm(futures):
+        responses.append(await future)
+
+    df = pd.DataFrame()
+    for response in responses:
+        extracted = handle_link(response)
+        df = pd.concat([df, pd.DataFrame(extracted, index=[0])])
+
+    df = df.reset_index(drop=True)
+    df.to_csv("out.csv")
+
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(main())
+
+
+# for i in tqdm(range(1, 49529, 15)):
+#    try:
+#
+#        url = f'https://www.tweedekamer.nl/kamerstukken/moties?qry=*&cfg=tksearch&fld_tk_categorie=Kamerstukken&fld_prl_kamerstuk=Moties&srt=date%3Adesc%3Adate&sta={i}'
+#        response = session.get(url)
+#
+#        extracted = parselet_list.parse_fromstring(response.content)
+#        for link in [x['link'] for x in extracted['moties']]:
+#            try:
+#                response = session.get(f'https://www.tweedekamer.nl{link}')
+#
+#            except:
+#                f.write("error with:", str(link))
+#        df = df.reset_index(drop=True)
+#        df.to_csv("out.csv")
+#    except:
+#        f.write("error with:", str(i))
+# f.close()
+#
